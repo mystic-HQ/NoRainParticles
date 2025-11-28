@@ -5,17 +5,17 @@ using UnityEngine;
 
 namespace NoRainParticles
 {
-    [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
+    [BepInPlugin("MysticDEV.NoRainParticles", "NoRainParticles", "1.0.0")]
     public class NoRainParticlesPlugin : BaseUnityPlugin
     {
         private static ManualLogSource? logger;
-        private readonly Harmony harmony = new Harmony(PluginInfo.PLUGIN_GUID);
+        private readonly Harmony harmony = new Harmony("MysticDEV.NoRainParticles");
 
         private void Awake()
         {
             logger = Logger;
             harmony.PatchAll();
-            logger.LogInfo($"Plugin {PluginInfo.PLUGIN_NAME} is loaded!");
+            logger.LogInfo("NoRainParticles v1.0.0 is loaded!");
         }
     }
 
@@ -78,12 +78,5 @@ namespace NoRainParticles
                 }
             }
         }
-    }
-
-    public static class PluginInfo
-    {
-        public const string PLUGIN_GUID = "com.yourname.norainparticles";
-        public const string PLUGIN_NAME = "NoRainParticles";
-        public const string PLUGIN_VERSION = "1.0.0";
     }
 }
