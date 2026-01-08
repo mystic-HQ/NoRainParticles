@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace NoRainParticles
 {
-    [BepInPlugin("MysticDEV.NoRainParticles", "NoRainParticles", "1.2.3")]
+    [BepInPlugin("MysticDEV.NoRainParticles", "NoRainParticles", "1.0.3")]
     public class NoRainParticlesPlugin : BaseUnityPlugin
     {
         internal static ManualLogSource? logger;
@@ -17,8 +17,46 @@ namespace NoRainParticles
         {
             logger = Logger;
             harmony.PatchAll();
-            logger.LogInfo("NoRainParticles v1.2.3 is loaded!");
+            logger.LogInfo("NoRainParticles v1.0.3 is loaded!");
         }
+        public static bool CanScan()
+        {
+            var sor = StartOfRound.Instance;
+            if (sor == null) return false;
+
+            return !sor.inShipPhase;
+        }
+
+        [HarmonyPatch(typeof(StartOfRound), "SetShipLanding")]
+        internal class StartLandingPatch
+        {
+            private static bool hasTriggered = false;
+
+            [HarmonyPostfix]
+            static void OnStartLanding()
+            {
+                if (hasTriggered) return;
+                hasTriggered = true;
+
+                NoRainParticlesPlugin.DisableRainParticles();
+            }
+
+            internal static void Reset()
+            {
+                hasTriggered = false;
+            }
+        }
+
+        [HarmonyPatch(typeof(StartOfRound), "StartGame")]
+        internal class ResetLandingTrigger
+        {
+            [HarmonyPrefix]
+            static void Reset()
+            {
+                StartLandingPatch.Reset();
+            }
+        }
+
 
         public static void LogAllParticleSystems()
         {
@@ -107,39 +145,45 @@ namespace NoRainParticles
         {
             try
             {
+                if (!CanScan())
+                    return;
+
                 int disabledCount = 0;
                 ParticleSystem[] allParticleSystems = UnityEngine.Object.FindObjectsOfType<ParticleSystem>();
 
-                logger?.LogInfo($"Scanning {allParticleSystems.Length} particle systems...");
+                logger?.LogInfo($"[DESCENT] Scanning {allParticleSystems.Length} particle systems...");
 
                 foreach (ParticleSystem ps in allParticleSystems)
                 {
                     if (ps == null || ps.gameObject == null) continue;
 
                     string name = ps.gameObject.name.ToLower();
-                    string parentName = ps.transform.parent != null ? ps.transform.parent.name.ToLower() : "";
+                    string parentName = ps.transform.parent != null
+                        ? ps.transform.parent.name.ToLower()
+                        : "";
 
-                    // Try to match rain particles - very broad search
-                    bool isRainParticle = name.Contains("rain") ||
-                                         parentName.Contains("rain") ||
-                                         (parentName.Contains("storm") && name.Contains("particle"));
+                    bool isRainParticle =
+                        name.Contains("rain") ||
+                        parentName.Contains("rain") ||
+                        (parentName.Contains("storm") && name.Contains("particle"));
 
-                    // Exclude gameplay-critical storm effects but NOT rain visuals
-                    bool isExcluded = name.Contains("lightning") || name.Contains("thunder") ||
-                                     name.Contains("bolt") || name.Contains("strike") ||
-                                     name.Contains("puddle") || name.Contains("splash") ||
-                                     name.Contains("mud") || name.Contains("ground") ||
-                                     name.Contains("magnet") || name.Contains("spark") ||
-                                     name.Contains("electric") || name.Contains("charge") ||
-                                     name.Contains("static") || name.Contains("blast") ||
-                                     name.Contains("warning") || name.Contains("flash") ||
-                                     parentName.Contains("magnet") ||
-                                     (parentName.Contains("stormy") && (name.Contains("static") ||
-                                      name.Contains("blast") || name.Contains("warning")));
+                    bool isExcluded =
+                        name.Contains("lightning") || name.Contains("thunder") ||
+                        name.Contains("bolt") || name.Contains("strike") ||
+                        name.Contains("puddle") || name.Contains("splash") ||
+                        name.Contains("mud") || name.Contains("ground") ||
+                        name.Contains("magnet") || name.Contains("spark") ||
+                        name.Contains("electric") || name.Contains("charge") ||
+                        name.Contains("static") || name.Contains("blast") ||
+                        name.Contains("warning") || name.Contains("flash") ||
+                        parentName.Contains("magnet") ||
+                        (parentName.Contains("stormy") && (
+                            name.Contains("static") ||
+                            name.Contains("blast") ||
+                            name.Contains("warning")));
 
                     if (isRainParticle && !isExcluded)
                     {
-                        // Try EVERYTHING to disable it
                         ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                         ps.Clear();
 
@@ -153,7 +197,6 @@ namespace NoRainParticles
                             renderer.forceRenderingOff = true;
                         }
 
-                        // Also try disabling the GameObject
                         ps.gameObject.SetActive(false);
 
                         disabledCount++;
@@ -170,8 +213,8 @@ namespace NoRainParticles
         }
     }
 
-    // Patch RoundManager
-    [HarmonyPatch(typeof(RoundManager))]
+        // Patch RoundManager
+        [HarmonyPatch(typeof(RoundManager))]
     internal class RoundManagerPatch
     {
         [HarmonyPatch("SetToCurrentLevelWeather")]
@@ -209,8 +252,8 @@ namespace NoRainParticles
         [HarmonyPostfix]
         static void OnTimeOfDayUpdate()
         {
-            // Check every 2 seconds instead of every frame for performance
-            if (Time.time - lastCheckTime > 2f)
+            // Check every 5 seconds for performance
+            if (Time.time - lastCheckTime > 5f)
             {
                 lastCheckTime = Time.time;
                 NoRainParticlesPlugin.DisableRainParticles();
