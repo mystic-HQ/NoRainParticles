@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
@@ -66,32 +66,29 @@ namespace NoRainParticles
                     if (ps == null || ps.gameObject == null) continue;
 
                     string name = ps.gameObject.name.ToLower();
-                    string parentName = ps.transform.parent != null
-                        ? ps.transform.parent.name.ToLower()
-                        : "";
+                    string parentName = ps.transform.parent != null ? ps.transform.parent.name.ToLower() : "";
 
-                    bool isRainParticle =
-                        name.Contains("rain") ||
-                        parentName.Contains("rain") ||
-                        (parentName.Contains("storm") && name.Contains("particle"));
+                    // Try to match rain particles - very broad search
+                    bool isRainParticle = name.Contains("rain") ||
+                                         parentName.Contains("rain") ||
+                                         (parentName.Contains("storm") && name.Contains("particle"));
 
-                    bool isExcluded =
-                        name.Contains("lightning") || name.Contains("thunder") ||
-                        name.Contains("bolt") || name.Contains("strike") ||
-                        name.Contains("puddle") || name.Contains("splash") ||
-                        name.Contains("mud") || name.Contains("ground") ||
-                        name.Contains("magnet") || name.Contains("spark") ||
-                        name.Contains("electric") || name.Contains("charge") ||
-                        name.Contains("static") || name.Contains("blast") ||
-                        name.Contains("warning") || name.Contains("flash") ||
-                        parentName.Contains("magnet") ||
-                        (parentName.Contains("stormy") && (
-                            name.Contains("static") ||
-                            name.Contains("blast") ||
-                            name.Contains("warning")));
+                    // Exclude gameplay-critical storm effects but NOT rain visuals
+                    bool isExcluded = name.Contains("lightning") || name.Contains("thunder") ||
+                                     name.Contains("bolt") || name.Contains("strike") ||
+                                     name.Contains("puddle") || name.Contains("splash") ||
+                                     name.Contains("mud") || name.Contains("ground") ||
+                                     name.Contains("magnet") || name.Contains("spark") ||
+                                     name.Contains("electric") || name.Contains("charge") ||
+                                     name.Contains("static") || name.Contains("blast") ||
+                                     name.Contains("warning") || name.Contains("flash") ||
+                                     parentName.Contains("magnet") ||
+                                     (parentName.Contains("stormy") && (name.Contains("static") ||
+                                      name.Contains("blast") || name.Contains("warning")));
 
                     if (isRainParticle && !isExcluded)
                     {
+                        // Try EVERYTHING to disable it
                         ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                         ps.Clear();
 
@@ -105,6 +102,7 @@ namespace NoRainParticles
                             renderer.forceRenderingOff = true;
                         }
 
+                        // Also try disabling the GameObject
                         ps.gameObject.SetActive(false);
 
                         disabledCount++;
@@ -118,6 +116,67 @@ namespace NoRainParticles
             {
                 logger?.LogError($"Error disabling rain particles: {ex.Message}");
             }
+        }
+    }
+
+    // Patch RoundManager
+    [HarmonyPatch(typeof(RoundManager))]
+    internal class RoundManagerPatch
+    {
+        [HarmonyPatch("SetToCurrentLevelWeather")]
+        [HarmonyPostfix]
+        static void OnSetWeather()
+        {
+            NoRainParticlesPlugin.logger?.LogInfo("RoundManager.SetToCurrentLevelWeather called");
+            NoRainParticlesPlugin.LogTimeOfDayEffects();
+            NoRainParticlesPlugin.LogAllParticleSystems();
+            NoRainParticlesPlugin.DisableRainParticles();
+        }
+
+        [HarmonyPatch("GenerateNewLevelClientRpc")]
+        [HarmonyPostfix]
+        static void OnGenerateNewLevel()
+        {
+            NoRainParticlesPlugin.logger?.LogInfo("RoundManager.GenerateNewLevelClientRpc called");
+        }
+    }
+
+    // Patch TimeOfDay
+    [HarmonyPatch(typeof(TimeOfDay))]
+    internal class TimeOfDayPatch
+    {
+        private static float lastCheckTime = 0f;
+
+        [HarmonyPatch("Start")]
+        [HarmonyPostfix]
+        static void OnTimeOfDayStart()
+        {
+            NoRainParticlesPlugin.logger?.LogInfo("TimeOfDay.Start called");
+        }
+
+        [HarmonyPatch("Update")]
+        [HarmonyPostfix]
+        static void OnTimeOfDayUpdate()
+        {
+            // Check every 2 seconds instead of every frame for performance
+            if (Time.time - lastCheckTime > 2f)
+            {
+                lastCheckTime = Time.time;
+                NoRainParticlesPlugin.DisableRainParticles();
+            }
+        }
+    }
+
+    // Patch StartOfRound
+    [HarmonyPatch(typeof(StartOfRound))]
+    internal class StartOfRoundPatch
+    {
+        [HarmonyPatch("StartGame")]
+        [HarmonyPostfix]
+        static void OnStartGame()
+        {
+            NoRainParticlesPlugin.logger?.LogInfo("StartOfRound.StartGame called");
+            NoRainParticlesPlugin.DisableRainParticles();
         }
     }
 }
