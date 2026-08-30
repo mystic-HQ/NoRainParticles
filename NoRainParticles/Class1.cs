@@ -6,7 +6,7 @@ using System.Collections;
 
 namespace NoRainParticles
 {
-    [BepInPlugin("MysticDEV.NoRainParticles", "NoRainParticles", "1.0.4")]
+    [BepInPlugin("MysticDEV.NoRainParticles", "NoRainParticles", "1.0.5")]
     public class NoRainParticlesPlugin : BaseUnityPlugin
     {
         internal static ManualLogSource? logger;
@@ -21,7 +21,7 @@ namespace NoRainParticles
             UnityEngine.Object.DontDestroyOnLoad(this.gameObject);
 
             harmony.PatchAll();
-            logger.LogInfo("NoRainParticles v1.0.4 is loaded!");
+            logger.LogInfo("NoRainParticles v1.0.5 is loaded!");
         }
 
         // Subscribe to the StartedLandingShip event
